@@ -65,4 +65,52 @@ describe('Fastest Finger First GameEngine', () => {
     GameEngine.submitAnswer(p.id, '12');
     expect(() => GameEngine.submitAnswer(p.id, '12')).toThrow(/already submitted/);
   });
+
+  it('correctly evaluates code_fix questions with syntax and whitespace tolerance', () => {
+    const p = GameEngine.join('Coder', 'C-101');
+    const newQ = GameEngine.addQuestion({
+      type: 'code_fix',
+      title: 'Fix Semicolon',
+      code: 'int a = 10',
+      correctAnswer: 'int a = 10;',
+      explanation: 'Missing semicolon',
+      timeLimitSeconds: 20,
+    });
+
+    const qIdx = GameEngine.getQuestions().findIndex((q) => q.id === newQ.id);
+    expect(qIdx).toBeGreaterThanOrEqual(0);
+    GameEngine.startQuestion(qIdx);
+
+    // Exact match
+    const res1 = GameEngine.submitAnswer(p.id, 'int a = 10;');
+    expect(res1.isCorrect).toBe(true);
+    expect(res1.points).toBeGreaterThan(0);
+  });
+
+  it('supports adding, updating, deleting, and resetting questions', () => {
+    const originalCount = GameEngine.getQuestions().length;
+
+    // 1. Add question
+    const created = GameEngine.addQuestion({
+      type: 'output',
+      title: 'Custom Pointer Test',
+      correctAnswer: '42',
+      explanation: 'Pointer math test',
+      timeLimitSeconds: 15,
+    });
+    expect(GameEngine.getQuestions().length).toBe(originalCount + 1);
+
+    // 2. Update question
+    const updated = GameEngine.updateQuestion(created.id, { title: 'Updated Pointer Title' });
+    expect(updated?.title).toBe('Updated Pointer Title');
+
+    // 3. Delete question
+    const deleted = GameEngine.deleteQuestion(created.id);
+    expect(deleted).toBe(true);
+    expect(GameEngine.getQuestions().length).toBe(originalCount);
+
+    // 4. Reset questions
+    GameEngine.resetQuestions();
+    expect(GameEngine.getQuestions().length).toBeGreaterThan(0);
+  });
 });

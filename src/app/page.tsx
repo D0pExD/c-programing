@@ -14,10 +14,12 @@ import {
   UserMinus,
   RefreshCw,
   UserCheck,
+  Wrench,
 } from 'lucide-react';
 import { CodeBlock } from '@/components/CodeBlock';
 import { Leaderboard } from '@/components/Leaderboard';
 import { supabase, FFF_CHANNEL_NAME } from '@/lib/supabase';
+import { QuestionType } from '@/data/questions';
 
 interface Snapshot {
   state: 'LOBBY' | 'QUESTION' | 'REVEAL' | 'LEADERBOARD' | 'FINISHED';
@@ -25,7 +27,7 @@ interface Snapshot {
   totalQuestions: number;
   currentQuestion?: {
     id: number;
-    type: 'mcq' | 'output';
+    type: QuestionType;
     title: string;
     description?: string;
     code?: string;
@@ -656,6 +658,40 @@ export default function StudentPlayPage() {
                     <span className="text-sm font-medium text-slate-200">{opt.text}</span>
                   </button>
                 ))}
+              </div>
+            ) : currentQuestion.type === 'code_fix' ? (
+              /* CODE FIX INPUT */
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center space-x-1.5">
+                    <Wrench className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Enter Corrected Code / Fix</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-mono">Syntax / Bug Fix</span>
+                </div>
+                <div className="space-y-2">
+                  <textarea
+                    rows={3}
+                    autoFocus
+                    placeholder="e.g. int total = 100; or scanf(&quot;%d&quot;, &amp;age);"
+                    value={textAnswer}
+                    onChange={(e) => setTextAnswer(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-sm focus:outline-none focus:border-amber-400"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      Type the fixed line or corrected statement.
+                    </span>
+                    <button
+                      disabled={submitting || !textAnswer.trim()}
+                      onClick={() => handleSubmit(textAnswer)}
+                      className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs uppercase flex items-center space-x-1.5 shadow-lg shadow-amber-500/25 transition-all disabled:opacity-40 shrink-0"
+                    >
+                      <span>SUBMIT FIX</span>
+                      <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : (
               /* OUTPUT PREDICTION INPUT */

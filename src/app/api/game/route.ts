@@ -90,6 +90,38 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, snapshot: GameEngine.getSnapshot() });
       }
 
+      case 'HOST_QUESTION_ADD': {
+        const { question } = body;
+        if (!question || !question.title || !question.correctAnswer) {
+          return NextResponse.json({ success: false, error: 'Incomplete question details' }, { status: 400 });
+        }
+        const created = GameEngine.addQuestion(question);
+        return NextResponse.json({ success: true, question: created, snapshot: GameEngine.getSnapshot() });
+      }
+
+      case 'HOST_QUESTION_UPDATE': {
+        const { id, question } = body;
+        if (!id || !question) {
+          return NextResponse.json({ success: false, error: 'Question ID and data required' }, { status: 400 });
+        }
+        const updated = GameEngine.updateQuestion(Number(id), question);
+        return NextResponse.json({ success: true, question: updated, snapshot: GameEngine.getSnapshot() });
+      }
+
+      case 'HOST_QUESTION_DELETE': {
+        const { id } = body;
+        if (!id) {
+          return NextResponse.json({ success: false, error: 'Question ID required' }, { status: 400 });
+        }
+        const deleted = GameEngine.deleteQuestion(Number(id));
+        return NextResponse.json({ success: deleted, snapshot: GameEngine.getSnapshot() });
+      }
+
+      case 'HOST_QUESTION_RESET': {
+        const questions = GameEngine.resetQuestions();
+        return NextResponse.json({ success: true, questions, snapshot: GameEngine.getSnapshot() });
+      }
+
       default:
         return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
     }

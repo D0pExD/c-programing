@@ -8,10 +8,12 @@ import {
   Users,
   Maximize,
   Minimize,
+  Wrench,
 } from 'lucide-react';
 import { CodeBlock } from '@/components/CodeBlock';
 import { Leaderboard } from '@/components/Leaderboard';
 import { supabase, FFF_CHANNEL_NAME } from '@/lib/supabase';
+import { QuestionType } from '@/data/questions';
 
 interface DisplaySnapshot {
   state: 'LOBBY' | 'QUESTION' | 'REVEAL' | 'LEADERBOARD' | 'FINISHED';
@@ -19,7 +21,7 @@ interface DisplaySnapshot {
   totalQuestions: number;
   currentQuestion?: {
     id: number;
-    type: 'mcq' | 'output';
+    type: QuestionType;
     title: string;
     description?: string;
     code?: string;
@@ -41,6 +43,7 @@ interface DisplaySnapshot {
     correctCount: number;
     totalTimeMs: number;
     lastPoints?: number;
+    hasSubmittedCurrent?: boolean;
   }[];
 }
 
@@ -121,7 +124,7 @@ export default function ProjectorDisplayPage() {
     };
 
     updateClock();
-    const interval = setInterval(updateClock, 300);
+    const interval = setInterval(updateClock, 250);
     return () => clearInterval(interval);
   }, [gameState, timeLimit, qStartTime]);
 
@@ -144,19 +147,20 @@ export default function ProjectorDisplayPage() {
     );
   }
 
-  const { state, currentQuestion, questionIndex, totalQuestions, totalPlayers, submittedCount, leaderboard } = snapshot;
+  const { state, currentQuestion, questionIndex, totalQuestions, totalPlayers, submittedCount, leaderboard } =
+    snapshot;
 
   return (
-    <div className="min-h-screen w-screen bg-[#060913] text-slate-100 flex flex-col justify-between overflow-hidden select-none">
+    <div className="min-h-screen w-screen bg-[#060913] text-slate-100 flex flex-col justify-between overflow-x-hidden select-none">
       {/* Top Bar */}
-      <header className="px-8 py-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between backdrop-blur-md">
-        <div className="flex items-center space-x-4">
+      <header className="px-6 sm:px-8 py-3.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between backdrop-blur-md sticky top-0 z-40">
+        <div className="flex items-center space-x-3.5">
           <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(0,245,160,0.25)]">
             <Zap className="w-6 h-6 fill-emerald-400" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <span className="font-black text-xl tracking-wider text-white">FASTEST FINGER FIRST</span>
+              <span className="font-black text-lg sm:text-xl tracking-wider text-white">FASTEST FINGER FIRST</span>
               <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-xs font-mono font-bold border border-emerald-500/30">
                 LIVE
               </span>
@@ -167,7 +171,7 @@ export default function ProjectorDisplayPage() {
 
         {/* Center state / question pill */}
         {state !== 'LOBBY' && (
-          <div className="px-5 py-1.5 rounded-full bg-slate-800 border border-slate-700 flex items-center space-x-3 text-sm font-bold font-mono">
+          <div className="hidden md:flex px-5 py-1.5 rounded-full bg-slate-800 border border-slate-700 items-center space-x-3 text-sm font-bold font-mono">
             <span className="text-emerald-400">
               QUESTION {questionIndex + 1} OF {totalQuestions}
             </span>
@@ -196,95 +200,147 @@ export default function ProjectorDisplayPage() {
       </header>
 
       {/* Main Display Area */}
-      <main className="flex-1 p-8 flex items-center justify-center">
-        {/* 1. LOBBY VIEW */}
+      <main className="flex-1 p-6 sm:p-8 flex items-center justify-center">
+        {/* ======================================================== */}
+        {/* 1. LOBBY VIEW (WITH LIVE JOINED PLAYERS ROSTER) */}
+        {/* ======================================================== */}
         {state === 'LOBBY' && (
-          <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* QR Code */}
-            <div className="p-8 rounded-3xl bg-slate-900/90 border border-emerald-500/30 flex flex-col items-center justify-center shadow-2xl">
+          <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Left (5 cols): QR Code */}
+            <div className="lg:col-span-5 p-8 rounded-3xl bg-slate-900/90 border border-emerald-500/30 flex flex-col items-center justify-center shadow-2xl">
               <div className="p-4 bg-white rounded-2xl shadow-2xl mb-6">
-                {joinUrl && <QRCodeSVG value={joinUrl} size={260} level="H" />}
+                {joinUrl && <QRCodeSVG value={joinUrl} size={240} level="H" />}
               </div>
-              <div className="text-center">
+              <div className="text-center w-full">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-1">
                   SCAN WITH PHONE CAMERA TO JOIN
                 </span>
-                <div className="text-base font-mono font-bold text-emerald-400 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800">
+                <div className="text-sm font-mono font-bold text-emerald-400 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800 truncate">
                   {joinUrl || 'http://localhost:3000'}
                 </div>
               </div>
             </div>
 
-            {/* Waiting info */}
-            <div className="space-y-6">
+            {/* Right (7 cols): Event Info & Live Joined Students List */}
+            <div className="lg:col-span-7 space-y-5">
               <div>
                 <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest font-mono">
                   UNIVERSITY BCA CHAMPIONSHIP
                 </span>
-                <h1 className="text-4xl font-black text-white mt-1 leading-tight">
+                <h1 className="text-3xl sm:text-4xl font-black text-white mt-1 leading-tight">
                   Fastest Finger First C Tournament
                 </h1>
-                <p className="text-slate-400 text-base mt-3 leading-relaxed">
-                  Enter your Name and Roll Number on your phone. Faster and accurate submissions earn
-                  bonus points. The student with the most points wins!
+                <p className="text-slate-400 text-sm mt-2 leading-relaxed">
+                  Enter your Name and Roll Number on your phone. Faster and accurate submissions earn bonus
+                  speed points. The student with the most points wins!
                 </p>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-slate-400">STUDENTS CONNECTED</div>
-                  <div className="text-3xl font-black font-mono text-emerald-400 mt-0.5">
-                    {totalPlayers} PLAYERS
+              {/* Connected Roster Card */}
+              <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold font-mono uppercase text-slate-300">
+                      Connected Students ({totalPlayers})
+                    </span>
                   </div>
+                  <span className="text-xs font-mono text-emerald-400 font-bold">Waiting for host...</span>
                 </div>
-                <div className="text-xs font-mono text-slate-500 text-right">
-                  Waiting for host to launch Q1...
-                </div>
+
+                {leaderboard.length === 0 ? (
+                  <div className="py-8 text-center text-xs font-mono text-slate-500">
+                    No students joined yet. Scan QR code to enter!
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                    {leaderboard.map((p, idx) => (
+                      <div
+                        key={p.id}
+                        className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center space-x-2 animate-fadeIn"
+                      >
+                        <span className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold flex items-center justify-center shrink-0">
+                          #{idx + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-white truncate">{p.name}</div>
+                          <div className="text-[10px] font-mono text-slate-400 truncate">{p.rollNo}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* 2. QUESTION VIEW */}
+        {/* ======================================================== */}
+        {/* 2. QUESTION VIEW (WITH ALWAYS VISIBLE LIVE STANDINGS) */}
+        {/* ======================================================== */}
         {state === 'QUESTION' && currentQuestion && (
-          <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left (8 cols): Question, C code, options */}
-            <div className="lg:col-span-8 space-y-6">
-              <div className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold text-emerald-400 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 uppercase">
-                    TYPE: {currentQuestion.type === 'mcq' ? 'MULTIPLE CHOICE' : 'EXACT OUTPUT PREDICTION'}
+          <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left (7 cols): Question, C code, options / fix prompt */}
+            <div className="lg:col-span-7 space-y-5">
+              <div className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span
+                    className={`text-xs font-mono font-bold px-3 py-1 rounded-full border uppercase ${
+                      currentQuestion.type === 'code_fix'
+                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                        : currentQuestion.type === 'mcq'
+                        ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                        : 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                    }`}
+                  >
+                    TYPE:{' '}
+                    {currentQuestion.type === 'code_fix'
+                      ? 'CODE FIX (SYNTAX ERROR)'
+                      : currentQuestion.type === 'mcq'
+                      ? 'MULTIPLE CHOICE'
+                      : 'EXACT OUTPUT PREDICTION'}
                   </span>
                   <span className="text-xs font-mono text-slate-400">
-                    Submissions:{' '}
+                    Answered:{' '}
                     <strong className="text-emerald-400 text-sm font-bold">
                       {submittedCount} / {totalPlayers}
                     </strong>
                   </span>
                 </div>
 
-                <h2 className="text-2xl font-black text-white">{currentQuestion.title}</h2>
+                <h2 className="text-2xl font-black text-white leading-tight">{currentQuestion.title}</h2>
                 {currentQuestion.description && (
-                  <p className="text-sm text-slate-300 mt-2">{currentQuestion.description}</p>
+                  <p className="text-sm text-slate-300">{currentQuestion.description}</p>
                 )}
               </div>
 
-              {/* Code */}
+              {/* Code Snippet */}
               {currentQuestion.code && (
-                <div className="text-base">
+                <div className="text-sm">
                   <CodeBlock code={currentQuestion.code} />
                 </div>
               )}
 
-              {/* Options (if MCQ) */}
+              {/* Code Fix Banner */}
+              {currentQuestion.type === 'code_fix' && (
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs sm:text-sm flex items-center space-x-2.5">
+                  <Wrench className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>
+                    <strong>Code Fix Challenge:</strong> Spot the syntax error/bug above and submit the
+                    corrected statement on your phone!
+                  </span>
+                </div>
+              )}
+
+              {/* MCQ Options (if MCQ) */}
               {currentQuestion.options && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   {currentQuestion.options.map((opt) => (
                     <div
                       key={opt.label}
-                      className="p-4 rounded-2xl border border-slate-800 bg-slate-900/90 flex items-center space-x-3 text-base"
+                      className="p-3.5 rounded-2xl border border-slate-800 bg-slate-900/90 flex items-center space-x-3 text-sm"
                     >
-                      <span className="w-8 h-8 rounded-xl bg-slate-800 font-mono font-bold text-sm text-emerald-400 flex items-center justify-center shrink-0">
+                      <span className="w-7 h-7 rounded-xl bg-slate-800 font-mono font-bold text-xs text-emerald-400 flex items-center justify-center shrink-0">
                         {opt.label}
                       </span>
                       <span className="font-mono text-slate-200">{opt.text}</span>
@@ -294,67 +350,198 @@ export default function ProjectorDisplayPage() {
               )}
             </div>
 
-            {/* Right (4 cols): Timer & live counts */}
-            <div className="lg:col-span-4 space-y-6">
-              <div className="p-8 rounded-3xl bg-slate-900/90 border border-slate-800 flex flex-col items-center justify-center text-center shadow-2xl">
-                <span className="text-xs uppercase font-bold tracking-widest text-slate-400 mb-2 font-mono">
-                  TIME REMAINING
-                </span>
-                <div
-                  className={`text-6xl font-black font-mono my-2 ${
-                    localTimeRemaining <= 5 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'
-                  }`}
-                >
-                  {localTimeRemaining}s
+            {/* Right (5 cols): Timer & ALWAYS-VISIBLE LIVE LEADERBOARD */}
+            <div className="lg:col-span-5 space-y-5">
+              {/* Timer & Submissions Bar */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 text-center shadow-xl">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 font-mono block">
+                    TIME REMAINING
+                  </span>
+                  <div
+                    className={`text-4xl sm:text-5xl font-black font-mono my-1 ${
+                      localTimeRemaining <= 5 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'
+                    }`}
+                  >
+                    {localTimeRemaining}s
+                  </div>
                 </div>
-                <div className="text-xs font-mono text-slate-500 mt-2">
-                  Answer fast on your phone!
+
+                <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 text-center shadow-xl">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 font-mono block">
+                    SUBMISSIONS
+                  </span>
+                  <div className="text-4xl sm:text-5xl font-black font-mono text-white my-1">
+                    {submittedCount}
+                    <span className="text-sm font-normal text-slate-500">/{totalPlayers}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 text-center">
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Live Submissions
+              {/* Live Standings Panel (ALWAYS VISIBLE) */}
+              <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <div className="flex items-center space-x-2">
+                    <Trophy className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-black text-white tracking-wider uppercase">
+                      Live Standings
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-emerald-400">⚡ Top Scorers</span>
                 </div>
-                <div className="text-3xl font-black font-mono text-white mt-1">
-                  {submittedCount}{' '}
-                  <span className="text-sm text-slate-500 font-normal">/ {totalPlayers}</span>
+
+                <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                  {leaderboard.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-slate-500 font-mono">
+                      No active players yet
+                    </div>
+                  ) : (
+                    leaderboard.slice(0, 8).map((p) => (
+                      <div
+                        key={p.id}
+                        className={`p-2.5 rounded-2xl border flex items-center justify-between text-xs transition-all ${
+                          p.hasSubmittedCurrent
+                            ? 'bg-emerald-950/20 border-emerald-500/40'
+                            : 'bg-slate-950/80 border-slate-800/80'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2.5 min-w-0">
+                          <span
+                            className={`w-6 h-6 rounded-lg font-mono font-bold text-[10px] flex items-center justify-center shrink-0 ${
+                              p.rank === 1
+                                ? 'bg-amber-500 text-slate-950 font-black'
+                                : p.rank === 2
+                                ? 'bg-slate-300 text-slate-950 font-bold'
+                                : p.rank === 3
+                                ? 'bg-amber-700 text-white font-bold'
+                                : 'bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            #{p.rank}
+                          </span>
+                          <div className="min-w-0">
+                            <span className="font-bold text-white block truncate">{p.name}</span>
+                            <span className="text-[10px] font-mono text-slate-400 block truncate">
+                              {p.rollNo}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2 shrink-0">
+                          {p.hasSubmittedCurrent && (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[9px] font-mono font-bold animate-pulse">
+                              LOCKED
+                            </span>
+                          )}
+                          <div className="font-mono font-black text-emerald-400 text-sm">
+                            {p.score} <span className="text-[10px] text-slate-500 font-normal">PTS</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 3. REVEAL VIEW */}
+        {/* ======================================================== */}
+        {/* 3. REVEAL VIEW (WITH ALWAYS VISIBLE LIVE STANDINGS) */}
+        {/* ======================================================== */}
         {state === 'REVEAL' && currentQuestion && (
-          <div className="w-full max-w-4xl space-y-6">
-            <div className="text-center">
-              <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest font-mono">
-                OFFICIAL ANSWER REVEAL
-              </span>
-              <h2 className="text-3xl font-black text-white mt-1">{currentQuestion.title}</h2>
-            </div>
-
-            {/* Correct Answer Box */}
-            <div className="p-8 rounded-3xl bg-emerald-950/30 border-2 border-emerald-400 text-center shadow-[0_0_35px_rgba(0,245,160,0.25)] space-y-3">
-              <span className="text-xs font-bold text-emerald-300 uppercase tracking-widest block">
-                CORRECT SOLUTION
-              </span>
-              <div className="text-4xl font-black font-mono text-emerald-400">
-                {currentQuestion.correctAnswer}
+          <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left (7 cols): Answer Reveal & Explanation */}
+            <div className="lg:col-span-7 space-y-5">
+              <div className="text-left space-y-1">
+                <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest font-mono">
+                  OFFICIAL SOLUTION REVEAL
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-black text-white">{currentQuestion.title}</h2>
               </div>
-              {currentQuestion.explanation && (
-                <p className="text-base text-slate-200 max-w-2xl mx-auto leading-relaxed pt-2 font-sans">
-                  {currentQuestion.explanation}
-                </p>
+
+              {/* Solution Box */}
+              <div className="p-6 rounded-3xl bg-emerald-950/30 border-2 border-emerald-400 shadow-[0_0_35px_rgba(0,245,160,0.25)] space-y-2">
+                <span className="text-xs font-bold text-emerald-300 uppercase tracking-widest block font-mono">
+                  CORRECT SOLUTION / FIX
+                </span>
+                <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-400 break-words">
+                  {currentQuestion.correctAnswer}
+                </div>
+                {currentQuestion.explanation && (
+                  <p className="text-sm text-slate-200 leading-relaxed pt-2 font-sans border-t border-emerald-500/20">
+                    {currentQuestion.explanation}
+                  </p>
+                )}
+              </div>
+
+              {currentQuestion.code && (
+                <div className="text-xs">
+                  <CodeBlock code={currentQuestion.code} />
+                </div>
               )}
             </div>
 
-            {currentQuestion.code && <CodeBlock code={currentQuestion.code} />}
+            {/* Right (5 cols): Updated Live Standings */}
+            <div className="lg:col-span-5 p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                <div className="flex items-center space-x-2">
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-black text-white tracking-wider uppercase">
+                    Updated Standings
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-emerald-400 font-bold">Points Awarded!</span>
+              </div>
+
+              <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+                {leaderboard.slice(0, 10).map((p) => (
+                  <div
+                    key={p.id}
+                    className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center space-x-2.5 min-w-0">
+                      <span
+                        className={`w-6 h-6 rounded-lg font-mono font-bold text-[10px] flex items-center justify-center shrink-0 ${
+                          p.rank === 1
+                            ? 'bg-amber-500 text-slate-950 font-black'
+                            : p.rank === 2
+                            ? 'bg-slate-300 text-slate-950 font-bold'
+                            : p.rank === 3
+                            ? 'bg-amber-700 text-white font-bold'
+                            : 'bg-slate-800 text-slate-300'
+                        }`}
+                      >
+                        #{p.rank}
+                      </span>
+                      <div className="min-w-0">
+                        <span className="font-bold text-white block truncate">{p.name}</span>
+                        <span className="text-[10px] font-mono text-slate-400 block truncate">
+                          {p.rollNo}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <div className="font-mono font-black text-emerald-400 text-sm">
+                        {p.score} <span className="text-[10px] text-slate-500 font-normal">PTS</span>
+                      </div>
+                      {p.lastPoints ? (
+                        <div className="text-[10px] font-mono font-bold text-emerald-400">
+                          +{p.lastPoints} pts
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* 4. LEADERBOARD VIEW */}
+        {/* ======================================================== */}
+        {/* 4. LEADERBOARD & FINISHED VIEW (FULL SCREEN PODIUM) */}
+        {/* ======================================================== */}
         {(state === 'LEADERBOARD' || state === 'FINISHED') && (
           <div className="w-full max-w-4xl space-y-6">
             <div className="text-center">

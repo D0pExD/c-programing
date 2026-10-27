@@ -1,4 +1,4 @@
-export type QuestionType = 'mcq' | 'output';
+export type QuestionType = 'mcq' | 'output' | 'code_fix';
 
 export interface QuestionOption {
   label: string; // 'A', 'B', 'C', 'D'
@@ -12,7 +12,7 @@ export interface Question {
   description?: string;
   code?: string;
   options?: QuestionOption[]; // for mcq
-  correctAnswer: string; // For MCQ: 'A', 'B', 'C', 'D'. For output: normalized string
+  correctAnswer: string; // For MCQ: 'A', 'B', 'C', 'D'. For output/code_fix: expected output or fix
   explanation: string;
   timeLimitSeconds: number; // default 20s
 }
@@ -435,5 +435,42 @@ int main() {
     correctAnswer: 'B',
     explanation: '<stdlib.h> declares dynamic memory management functions malloc(), calloc(), realloc(), and free().',
     timeLimitSeconds: 12,
+  },
+
+  // 21. Code Fix (Syntax Error)
+  {
+    id: 21,
+    type: 'code_fix',
+    title: 'Syntax Error: Missing Semicolon',
+    description: 'Find and fix the syntax error in this C program.',
+    code: `#include <stdio.h>
+
+int main() {
+    int total = 100
+    printf("Total: %d\\n", total);
+    return 0;
+}`,
+    correctAnswer: 'int total = 100;',
+    explanation: 'The statement "int total = 100" was missing a terminating semicolon ";". In C, every statement must terminate with a semicolon.',
+    timeLimitSeconds: 25,
+  },
+
+  // 22. Code Fix (Scanf Address Error)
+  {
+    id: 22,
+    type: 'code_fix',
+    title: 'Syntax Error: Missing Address-of Operator in scanf',
+    description: 'Fix the scanf line so that user input is properly stored in variable age.',
+    code: `#include <stdio.h>
+
+int main() {
+    int age;
+    scanf("%d", age);
+    printf("Age: %d\\n", age);
+    return 0;
+}`,
+    correctAnswer: 'scanf("%d", &age);',
+    explanation: 'scanf requires the memory address of the variable (&age). Passing "age" by value causes undefined behavior or a segmentation fault.',
+    timeLimitSeconds: 25,
   },
 ];

@@ -37,6 +37,7 @@ interface ServerGameState {
   players: Map<string, Player>; // id -> Player
   submissions: Map<number, Map<string, Submission>>; // questionId -> (playerId -> Submission)
   listeners: Set<Listener>;
+  questions: Question[];
 }
 
 declare global {
@@ -52,6 +53,7 @@ function getGame(): ServerGameState {
       players: new Map(),
       submissions: new Map(),
       listeners: new Set(),
+      questions: [...QUESTIONS],
     };
 
     if (typeof window !== 'undefined') {
@@ -67,6 +69,9 @@ function getGame(): ServerGameState {
           if (parsed.state) globalThis.__fff_game.state = parsed.state;
           if (typeof parsed.questionIndex === 'number') {
             globalThis.__fff_game.questionIndex = parsed.questionIndex;
+          }
+          if (parsed.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+            globalThis.__fff_game.questions = parsed.questions;
           }
         }
       } catch {
@@ -89,6 +94,7 @@ export class GameEngine {
             players: Array.from(this.game.players.values()),
             state: this.game.state,
             questionIndex: this.game.questionIndex,
+            questions: this.game.questions,
           })
         );
       } catch {
@@ -116,7 +122,45 @@ export class GameEngine {
   }
 
   public static getQuestions(): Question[] {
-    return QUESTIONS;
+    return this.game.questions;
+  }
+
+  public static addQuestion(q: Omit<Question, 'id'> & { id?: number }): Question {
+    const nextId =
+      this.game.questions.length > 0 ? Math.max(...this.game.questions.map((item) => item.id)) + 1 : 1;
+    const newQuestion: Question = { ...q, id: q.id || nextId };
+    this.game.questions.push(newQuestion);
+    this.persist();
+    this.notify();
+    return newQuestion;
+  }
+
+  public static updateQuestion(id: number, updated: Partial<Question>): Question | null {
+    const idx = this.game.questions.findIndex((q) => q.id === id);
+    if (idx === -1) return null;
+    this.game.questions[idx] = { ...this.game.questions[idx], ...updated, id };
+    this.persist();
+    this.notify();
+    return this.game.questions[idx];
+  }
+
+  public static deleteQuestion(id: number): boolean {
+    const idx = this.game.questions.findIndex((q) => q.id === id);
+    if (idx === -1) return false;
+    this.game.questions.splice(idx, 1);
+    if (this.game.questionIndex >= this.game.questions.length) {
+      this.game.questionIndex = Math.max(0, this.game.questions.length - 1);
+    }
+    this.persist();
+    this.notify();
+    return true;
+  }
+
+  public static resetQuestions(): Question[] {
+    this.game.questions = [...QUESTIONS];
+    this.persist();
+    this.notify();
+    return this.game.questions;
   }
 
   public static join(name: string, rollNo: string): Player {
@@ -154,12 +198,13 @@ export class GameEngine {
   }
 
   public static startQuestion(index: number) {
-    if (index >= 0 && index < QUESTIONS.length) {
+    if (index >= 0 && index < this.game.questions.length) {
       this.game.questionIndex = index;
       this.game.state = 'QUESTION';
       this.game.questionStartTime = Date.now();
-      if (!this.game.submissions.has(QUESTIONS[index].id)) {
-        this.game.submissions.set(QUESTIONS[index].id, new Map());
+      const currentQ = this.game.questions[index];
+      if (currentQ && !this.game.submissions.has(currentQ.id)) {
+        this.game.submissions.set(currentQ.id, new Map());
       }
       this.notify();
     }
@@ -176,7 +221,7 @@ export class GameEngine {
       throw new Error('Submissions are not currently active');
     }
 
-    const currentQ = QUESTIONS[this.game.questionIndex];
+    const currentQ = this.game.questions[this.game.questionIndex];
     if (!currentQ) throw new Error('No active question');
 
     let questionSubs = this.game.submissions.get(currentQ.id);
@@ -199,6 +244,25 @@ export class GameEngine {
 
     if (currentQ.type === 'mcq') {
       isCorrect = cleanInput.toUpperCase() === currentQ.correctAnswer.toUpperCase();
+    } else if (currentQ.type === 'code_fix') {
+      // Code fix evaluation: smart syntax and whitespace normalization
+      const normalize = (str: string) =>
+        str
+          .replace(/\/\/.*$/gm, '') // strip single line comments
+          .replace(/\/\*[\s\S]*?\*\//g, '') // strip multi-line comments
+          .replace(/\s+/g, ' ') // collapse whitespace
+          .replace(/\s*([;{}()=+\-*/<>!&|,])\s*/g, '$1') // normalize around operators/punctuations
+          .trim()
+          .toLowerCase();
+
+      const normUser = normalize(cleanInput);
+      const acceptedOptions = currentQ.correctAnswer.split('||').map((opt) => normalize(opt));
+
+      isCorrect = Boolean(
+        acceptedOptions.some((opt) => opt === normUser) ||
+        cleanInput.toLowerCase() === currentQ.correctAnswer.trim().toLowerCase() ||
+        (acceptedOptions[0] && acceptedOptions[0].length >= 4 && normUser.includes(acceptedOptions[0]))
+      );
     } else {
       // output prediction: case-insensitive & whitespace trimmed
       isCorrect = cleanInput.toLowerCase() === currentQ.correctAnswer.trim().toLowerCase();
@@ -250,7 +314,7 @@ export class GameEngine {
 
   public static nextQuestion() {
     const nextIdx = this.game.questionIndex + 1;
-    if (nextIdx < QUESTIONS.length) {
+    if (nextIdx < this.game.questions.length) {
       this.startQuestion(nextIdx);
     } else {
       this.game.state = 'FINISHED';
@@ -286,11 +350,12 @@ export class GameEngine {
   }
 
   public static getSnapshot(playerId?: string) {
-    const currentQ = QUESTIONS[this.game.questionIndex];
+    const currentQ = this.game.questions[this.game.questionIndex];
     const questionSubs = currentQ ? this.game.submissions.get(currentQ.id) : undefined;
     const submittedCount = questionSubs ? questionSubs.size : 0;
 
-    const isRevealed = this.game.state === 'REVEAL' || this.game.state === 'LEADERBOARD' || this.game.state === 'FINISHED';
+    const isRevealed =
+      this.game.state === 'REVEAL' || this.game.state === 'LEADERBOARD' || this.game.state === 'FINISHED';
 
     // Sanitize question for student / projector
     let sanitizedQ = undefined;
@@ -348,8 +413,9 @@ export class GameEngine {
     return {
       state: this.game.state,
       questionIndex: this.game.questionIndex,
-      totalQuestions: QUESTIONS.length,
+      totalQuestions: this.game.questions.length,
       currentQuestion: sanitizedQ,
+      questions: this.game.questions,
       questionStartTime: this.game.questionStartTime,
       timeRemaining,
       totalPlayers: this.game.players.size,
