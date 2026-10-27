@@ -44,18 +44,21 @@ export async function POST(req: NextRequest) {
       case 'JOIN': {
         const { name, rollNo } = body;
         if (!name || !rollNo) {
-          return NextResponse.json({ success: false, error: 'Name and Roll Number required' }, { status: 400 });
+          return NextResponse.json({ success: false, error: 'Name and PRN Number required' }, { status: 400 });
         }
         const player = GameEngine.join(name, rollNo);
         return NextResponse.json({ success: true, player });
       }
 
       case 'SUBMIT': {
-        const { playerId, answer } = body;
+        const { playerId, answer, name, rollNo } = body;
         if (!playerId || answer === undefined) {
           return NextResponse.json({ success: false, error: 'Missing answer or player ID' }, { status: 400 });
         }
-        const result = GameEngine.submitAnswer(playerId, String(answer));
+        const result = GameEngine.submitAnswer(playerId, String(answer), {
+          name: name ? String(name) : undefined,
+          rollNo: rollNo ? String(rollNo) : undefined,
+        });
         return NextResponse.json({ success: true, ...result });
       }
 

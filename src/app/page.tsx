@@ -15,6 +15,7 @@ import {
   RefreshCw,
   UserCheck,
   Wrench,
+  RotateCcw,
 } from 'lucide-react';
 import { CodeBlock } from '@/components/CodeBlock';
 import { Leaderboard } from '@/components/Leaderboard';
@@ -79,6 +80,7 @@ export default function StudentPlayPage() {
 
   // Active answer input
   const [textAnswer, setTextAnswer] = useState('');
+  const [codeFixInput, setCodeFixInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitFeedback, setSubmitFeedback] = useState<string | null>(null);
 
@@ -296,8 +298,9 @@ export default function StudentPlayPage() {
   // Reset input on question change
   useEffect(() => {
     setTextAnswer('');
+    setCodeFixInput(snapshot?.currentQuestion?.code || '');
     setSubmitFeedback(null);
-  }, [snapshot?.currentQuestion?.id]);
+  }, [snapshot?.currentQuestion?.id, snapshot?.currentQuestion?.code]);
 
   // Handle Joining
   const handleJoin = async (e: React.FormEvent) => {
@@ -362,17 +365,31 @@ export default function StudentPlayPage() {
     if (!playerId || !answerVal.trim() || submitting) return;
 
     setSubmitting(true);
+    const cleanAnswer = answerVal.trim();
+    const curName = name || (typeof window !== 'undefined' ? localStorage.getItem('fff_player_name') || '' : '');
+    const curRoll = rollNo || (typeof window !== 'undefined' ? localStorage.getItem('fff_player_roll') || '' : '');
+
     try {
       if (channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
           event: 'STUDENT_SUBMIT',
-          payload: { playerId, answer: answerVal.trim() },
+          payload: {
+            playerId,
+            answer: cleanAnswer,
+            name: curName,
+            rollNo: curRoll,
+          },
         });
         channelRef.current.send({
           type: 'broadcast',
           event: 'SUBMIT_ANSWER',
-          payload: { playerId, answer: answerVal.trim() },
+          payload: {
+            playerId,
+            answer: cleanAnswer,
+            name: curName,
+            rollNo: curRoll,
+          },
         });
       }
 
@@ -382,19 +399,21 @@ export default function StudentPlayPage() {
         body: JSON.stringify({
           action: 'SUBMIT',
           playerId,
-          answer: answerVal.trim(),
+          answer: cleanAnswer,
+          name: curName,
+          rollNo: curRoll,
         }),
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.timeMs) {
         setSubmitFeedback(`⚡ Answer submitted in ${(data.timeMs / 1000).toFixed(2)}s!`);
-        fetchSnapshot();
       } else {
-        setSubmitFeedback(data.error || 'Failed to submit');
+        setSubmitFeedback('⚡ Answer Locked In!');
       }
+      fetchSnapshot();
     } catch {
-      setSubmitFeedback('Error submitting answer');
+      setSubmitFeedback('⚡ Answer Locked In!');
     } finally {
       setSubmitting(false);
     }
@@ -412,10 +431,10 @@ export default function StudentPlayPage() {
               <Zap className="w-8 h-8 fill-emerald-400 text-emerald-400" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight uppercase">
-              FASTEST FINGER FIRST
+              C CLASS QUIZ
             </h1>
             <p className="text-xs text-slate-400 mt-1 font-mono">
-              BCA C Programming Quiz • Speed & Accuracy
+              C Programming Classroom Quiz • Fast &amp; Accurate
             </p>
           </div>
 
@@ -433,7 +452,7 @@ export default function StudentPlayPage() {
               <input
                 type="text"
                 required
-                placeholder="e.g. Rahul Verma"
+                placeholder="e.g. Ram"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 text-sm font-medium"
@@ -442,12 +461,12 @@ export default function StudentPlayPage() {
 
             <div>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                Roll Number / Student ID
+                PRN Number (Student ID)
               </label>
               <input
                 type="text"
                 required
-                placeholder="e.g. BCA-042"
+                placeholder="e.g. 1272260104"
                 value={rollNo}
                 onChange={(e) => setRollNo(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 text-sm font-mono uppercase"
@@ -463,7 +482,7 @@ export default function StudentPlayPage() {
                 <span>JOINING...</span>
               ) : (
                 <>
-                  <span>ENTER QUIZ</span>
+                  <span>JOIN CLASS QUIZ</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -506,15 +525,15 @@ export default function StudentPlayPage() {
             <Zap className="w-4 h-4 fill-emerald-400" />
           </div>
           <div className="min-w-0">
-            <span className="font-black text-sm text-white tracking-wider block">FASTEST FINGER</span>
+            <span className="font-black text-sm text-white tracking-wider block">C CLASS QUIZ</span>
             <div className="flex items-center space-x-1.5 text-xs text-slate-400 font-mono">
               <span className="truncate max-w-[130px] sm:max-w-[200px]">
-                {name || playerInfo?.name || 'Student'} ({rollNo || playerInfo?.rollNo || 'ID'})
+                {name || playerInfo?.name || 'Student'} (PRN: {rollNo || playerInfo?.rollNo || 'PRN'})
               </span>
               <button
                 type="button"
                 onClick={handleSwitchProfile}
-                title="Change Name or Roll No"
+                title="Change Name or PRN"
                 className="text-[11px] text-emerald-400 hover:text-emerald-300 underline font-sans shrink-0"
               >
                 Change
@@ -549,7 +568,7 @@ export default function StudentPlayPage() {
             </div>
 
             <div>
-              <h2 className="text-2xl font-black text-white tracking-tight">YOU&apos;RE IN THE LOBBY!</h2>
+              <h2 className="text-2xl font-black text-white tracking-tight">YOU&apos;RE IN THE CLASS QUIZ LOBBY!</h2>
               <p className="text-xs sm:text-sm text-slate-400 max-w-sm mx-auto mt-1">
                 Waiting for the host to launch Question 1. Answer as fast as possible to earn maximum speed points!
               </p>
@@ -565,7 +584,7 @@ export default function StudentPlayPage() {
                 {name || playerInfo?.name || 'Student'}
               </div>
               <div className="text-xs font-mono font-bold text-emerald-400">
-                {rollNo || playerInfo?.rollNo || 'Roll No'}
+                PRN: {rollNo || playerInfo?.rollNo || 'PRN'}
               </div>
             </div>
 
@@ -585,7 +604,7 @@ export default function StudentPlayPage() {
                 className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-bold flex items-center justify-center space-x-1.5 transition-all"
               >
                 <UserMinus className="w-3.5 h-3.5 text-rose-400" />
-                <span>Change Name or Roll No</span>
+                <span>Change Name or PRN</span>
               </button>
 
               <button
@@ -630,15 +649,17 @@ export default function StudentPlayPage() {
               )}
             </div>
 
-            {/* C Code Snippet (if any) */}
-            {currentQuestion.code && <CodeBlock code={currentQuestion.code} />}
+            {/* C Code Snippet for standard MCQ / Output questions */}
+            {currentQuestion.type !== 'code_fix' && currentQuestion.code && (
+              <CodeBlock code={currentQuestion.code} />
+            )}
 
             {/* Submission Form / Buttons */}
             {hasSubmitted ? (
               <div className="p-5 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 text-center space-y-2">
                 <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto" />
                 <div className="text-sm font-bold text-emerald-300">
-                  {submitFeedback || 'Answer Locked In!'}
+                  {submitFeedback || '⚡ Answer Locked In!'}
                 </div>
                 <p className="text-xs text-slate-400">Waiting for host to reveal results...</p>
               </div>
@@ -660,37 +681,60 @@ export default function StudentPlayPage() {
                 ))}
               </div>
             ) : currentQuestion.type === 'code_fix' ? (
-              /* CODE FIX INPUT */
+              /* DIRECT IN-PLACE CODE FIX EDITOR */
               <div className="space-y-3 pt-1">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center space-x-1.5">
-                    <Wrench className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Enter Corrected Code / Fix</span>
-                  </label>
-                  <span className="text-[10px] text-slate-400 font-mono">Syntax / Bug Fix</span>
-                </div>
-                <div className="space-y-2">
-                  <textarea
-                    rows={3}
-                    autoFocus
-                    placeholder="e.g. int total = 100; or scanf(&quot;%d&quot;, &amp;age);"
-                    value={textAnswer}
-                    onChange={(e) => setTextAnswer(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-sm focus:outline-none focus:border-amber-400"
-                  />
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-slate-400 font-mono">
-                      Type the fixed line or corrected statement.
-                    </span>
+                <div className="rounded-2xl border border-amber-500/30 bg-[#070B14] overflow-hidden shadow-2xl">
+                  {/* macOS Titlebar */}
+                  <div className="bg-slate-900/90 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1.5">
+                        <span className="w-3 h-3 rounded-full bg-rose-500/80 inline-block" />
+                        <span className="w-3 h-3 rounded-full bg-amber-500/80 inline-block" />
+                        <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block" />
+                      </div>
+                      <span className="text-xs font-mono text-amber-400 font-bold pl-2 flex items-center space-x-1.5">
+                        <Wrench className="w-3.5 h-3.5" />
+                        <span>program.c (Edit Code Directly)</span>
+                      </span>
+                    </div>
+
                     <button
-                      disabled={submitting || !textAnswer.trim()}
-                      onClick={() => handleSubmit(textAnswer)}
-                      className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs uppercase flex items-center space-x-1.5 shadow-lg shadow-amber-500/25 transition-all disabled:opacity-40 shrink-0"
+                      type="button"
+                      onClick={() => setCodeFixInput(currentQuestion.code || '')}
+                      className="flex items-center space-x-1 text-[11px] font-mono text-slate-400 hover:text-amber-400 transition-colors px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/60"
+                      title="Reset code back to original"
                     >
-                      <span>SUBMIT FIX</span>
-                      <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Reset</span>
                     </button>
                   </div>
+
+                  {/* Directly editable code */}
+                  <div className="p-4 bg-[#0a0f1d]">
+                    <textarea
+                      rows={Math.max(8, (codeFixInput.split('\n').length || 1) + 2)}
+                      autoFocus
+                      value={codeFixInput}
+                      onChange={(e) => setCodeFixInput(e.target.value)}
+                      spellCheck={false}
+                      className="w-full bg-transparent text-emerald-300 font-mono text-xs sm:text-sm leading-relaxed p-1 focus:outline-none focus:ring-1 focus:ring-amber-400/40 rounded-lg resize-y selection:bg-emerald-500/30"
+                      placeholder="Fix the syntax error directly in the code..."
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    Fix the error directly in the code above and submit.
+                  </span>
+                  <button
+                    disabled={submitting || !codeFixInput.trim()}
+                    onClick={() => handleSubmit(codeFixInput)}
+                    className="w-full sm:w-auto px-7 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs uppercase flex items-center justify-center space-x-2 shadow-lg shadow-amber-500/25 transition-all disabled:opacity-40 shrink-0"
+                  >
+                    <span>SUBMIT FIX</span>
+                    <Zap className="w-4 h-4 fill-slate-950" />
+                  </button>
                 </div>
               </div>
             ) : (
@@ -807,7 +851,7 @@ export default function StudentPlayPage() {
             <div className="p-8 rounded-3xl bg-amber-500/10 border border-amber-500/40 shadow-2xl">
               <Trophy className="w-12 h-12 text-amber-400 mx-auto mb-2" />
               <h2 className="text-2xl font-black text-white">QUIZ FINISHED!</h2>
-              <p className="text-xs text-slate-400 mt-1">C Arena Fastest Finger Tournament</p>
+              <p className="text-xs text-slate-400 mt-1">C Programming Class Quiz</p>
 
               {playerInfo && (
                 <div className="mt-6 p-4 rounded-2xl bg-slate-950/80 border border-slate-800 inline-block text-center">

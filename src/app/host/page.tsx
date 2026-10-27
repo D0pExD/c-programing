@@ -231,7 +231,14 @@ export default function HostControlPage() {
           }
           case 'SUBMIT': {
             if (payload?.playerId && payload?.answer !== undefined) {
-              GameEngine.submitAnswer(String(payload.playerId), String(payload.answer));
+              GameEngine.submitAnswer(
+                String(payload.playerId),
+                String(payload.answer),
+                {
+                  name: payload.name ? String(payload.name) : undefined,
+                  rollNo: payload.rollNo ? String(payload.rollNo) : undefined,
+                }
+              );
             }
             break;
           }
@@ -285,15 +292,15 @@ export default function HostControlPage() {
         }
       })
       .on('broadcast', { event: 'STUDENT_SUBMIT' }, async (payload) => {
-        const { playerId, answer } = payload.payload || {};
+        const { playerId, answer, name, rollNo } = payload.payload || {};
         if (playerId && answer !== undefined) {
-          await sendAction('SUBMIT', { playerId, answer });
+          await sendAction('SUBMIT', { playerId, answer, name, rollNo });
         }
       })
       .on('broadcast', { event: 'SUBMIT_ANSWER' }, async (payload) => {
-        const { playerId, answer } = payload.payload || {};
+        const { playerId, answer, name, rollNo } = payload.payload || {};
         if (playerId && answer !== undefined) {
-          await sendAction('SUBMIT', { playerId, answer });
+          await sendAction('SUBMIT', { playerId, answer, name, rollNo });
         }
       })
       .subscribe((status) => {
@@ -431,10 +438,6 @@ export default function HostControlPage() {
               <span>{loginLoading ? 'UNLOCKING...' : 'UNLOCK HOST CONSOLE'}</span>
             </button>
           </form>
-
-          <div className="mt-6 text-center text-slate-600 text-[11px] font-mono">
-            Default: <code className="text-slate-400">admin123</code> (configured in .env)
-          </div>
         </div>
       </div>
     );
@@ -461,8 +464,8 @@ export default function HostControlPage() {
             <Zap className="w-6 h-6 fill-emerald-400" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-white">HOST CONTROL CONSOLE</h1>
-            <p className="text-xs text-slate-400 font-mono">Fastest Finger First Quiz Engine</p>
+            <h1 className="text-xl font-black text-white">CLASS QUIZ • HOST CONSOLE</h1>
+            <p className="text-xs text-slate-400 font-mono">Live Class Quiz Controller</p>
           </div>
         </div>
 

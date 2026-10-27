@@ -160,12 +160,12 @@ export default function ProjectorDisplayPage() {
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <span className="font-black text-lg sm:text-xl tracking-wider text-white">FASTEST FINGER FIRST</span>
+              <span className="font-black text-lg sm:text-xl tracking-wider text-white">C PROGRAMMING CLASS QUIZ</span>
               <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-xs font-mono font-bold border border-emerald-500/30">
                 LIVE
               </span>
             </div>
-            <p className="text-xs text-slate-400">BCA C Programming Quiz Tournament</p>
+            <p className="text-xs text-slate-400">Class Quiz • Speed & Accuracy</p>
           </div>
         </div>
 
@@ -225,14 +225,13 @@ export default function ProjectorDisplayPage() {
             <div className="lg:col-span-7 space-y-5">
               <div>
                 <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest font-mono">
-                  UNIVERSITY BCA CHAMPIONSHIP
+                  CLASSROOM QUIZ
                 </span>
                 <h1 className="text-3xl sm:text-4xl font-black text-white mt-1 leading-tight">
-                  Fastest Finger First C Tournament
+                  C Programming Class Quiz
                 </h1>
                 <p className="text-slate-400 text-sm mt-2 leading-relaxed">
-                  Enter your Name and Roll Number on your phone. Faster and accurate submissions earn bonus
-                  speed points. The student with the most points wins!
+                  Scan QR code with your phone. Enter your Name and PRN Number to join. Answer accurately and fast to earn speed bonus points!
                 </p>
               </div>
 
@@ -242,7 +241,7 @@ export default function ProjectorDisplayPage() {
                   <div className="flex items-center space-x-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
                     <span className="text-xs font-bold font-mono uppercase text-slate-300">
-                      Connected Students ({totalPlayers})
+                      Students in Quiz ({totalPlayers})
                     </span>
                   </div>
                   <span className="text-xs font-mono text-emerald-400 font-bold">Waiting for host...</span>
@@ -264,7 +263,7 @@ export default function ProjectorDisplayPage() {
                         </span>
                         <div className="min-w-0">
                           <div className="text-xs font-bold text-white truncate">{p.name}</div>
-                          <div className="text-[10px] font-mono text-slate-400 truncate">{p.rollNo}</div>
+                          <div className="text-[10px] font-mono text-slate-400 truncate">PRN: {p.rollNo}</div>
                         </div>
                       </div>
                     ))}
@@ -422,7 +421,7 @@ export default function ProjectorDisplayPage() {
                           <div className="min-w-0">
                             <span className="font-bold text-white block truncate">{p.name}</span>
                             <span className="text-[10px] font-mono text-slate-400 block truncate">
-                              {p.rollNo}
+                              PRN: {p.rollNo}
                             </span>
                           </div>
                         </div>
@@ -517,7 +516,7 @@ export default function ProjectorDisplayPage() {
                       <div className="min-w-0">
                         <span className="font-bold text-white block truncate">{p.name}</span>
                         <span className="text-[10px] font-mono text-slate-400 block truncate">
-                          {p.rollNo}
+                          PRN: {p.rollNo}
                         </span>
                       </div>
                     </div>
@@ -549,7 +548,7 @@ export default function ProjectorDisplayPage() {
                 <Trophy className="w-8 h-8" />
               </div>
               <h2 className="text-3xl font-black text-white uppercase tracking-tight">
-                {state === 'FINISHED' ? 'FINAL TOURNAMENT WINNERS' : 'LIVE LEADERBOARD'}
+                {state === 'FINISHED' ? 'CLASS QUIZ COMPLETED' : 'LIVE LEADERBOARD'}
               </h2>
               <p className="text-xs text-slate-400 font-mono mt-1">
                 The student with the most points wins!

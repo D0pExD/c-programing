@@ -3,9 +3,9 @@ import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'C ARENA — Real-Time Multiplayer C Tournament',
+  title: 'C Programming Class Quiz — Interactive Real-Time Quiz',
   description:
-    'University BCA First Year interactive C programming competition platform with real-time sync, mobile-first player dashboards, and high-definition public projector display.',
+    'BCA First Year interactive C programming classroom quiz with real-time sync, mobile-friendly student dashboards, and live projector display.',
 };
 
 export const viewport: Viewport = {

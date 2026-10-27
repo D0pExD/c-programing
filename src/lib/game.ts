@@ -212,10 +212,43 @@ export class GameEngine {
 
   public static submitAnswer(
     playerId: string,
-    rawAnswer: string
+    rawAnswer: string,
+    fallbackInfo?: { name?: string; rollNo?: string }
   ): { isCorrect: boolean; points: number; timeMs: number } {
-    const player = this.game.players.get(playerId);
-    if (!player) throw new Error('Player not found');
+    let player = this.game.players.get(playerId);
+
+    // Fallback 1: Lookup by PRN / Roll Number
+    if (!player && fallbackInfo?.rollNo) {
+      const cleanRoll = fallbackInfo.rollNo.trim().toUpperCase();
+      for (const p of this.game.players.values()) {
+        if (p.rollNo.toUpperCase() === cleanRoll) {
+          player = p;
+          break;
+        }
+      }
+    }
+
+    // Fallback 2: Auto-register seamlessly if student info provided
+    if (!player && fallbackInfo?.name && fallbackInfo?.rollNo) {
+      player = this.join(fallbackInfo.name, fallbackInfo.rollNo);
+    }
+
+    // Fallback 3: Create guest student record so player is NEVER missing
+    if (!player) {
+      const guestRoll = fallbackInfo?.rollNo || `PRN-${Math.floor(1000 + Math.random() * 9000)}`;
+      const guestName = fallbackInfo?.name || 'Student';
+      player = {
+        id: playerId,
+        name: guestName,
+        rollNo: guestRoll,
+        score: 0,
+        rank: this.game.players.size + 1,
+        correctCount: 0,
+        totalTimeMs: 0,
+        joinedAt: Date.now(),
+      };
+      this.game.players.set(playerId, player);
+    }
 
     if (this.game.state !== 'QUESTION') {
       throw new Error('Submissions are not currently active');
@@ -258,9 +291,10 @@ export class GameEngine {
       const acceptedOptions = currentQ.correctAnswer.split('||').map((opt) => normalize(opt));
 
       isCorrect = Boolean(
-        acceptedOptions.some((opt) => opt === normUser) ||
-        cleanInput.toLowerCase() === currentQ.correctAnswer.trim().toLowerCase() ||
-        (acceptedOptions[0] && acceptedOptions[0].length >= 4 && normUser.includes(acceptedOptions[0]))
+        acceptedOptions.some(
+          (opt) => opt === normUser || (opt.length >= 4 && normUser.includes(opt))
+        ) ||
+        cleanInput.toLowerCase() === currentQ.correctAnswer.trim().toLowerCase()
       );
     } else {
       // output prediction: case-insensitive & whitespace trimmed

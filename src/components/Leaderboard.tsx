@@ -74,7 +74,7 @@ export function Leaderboard({
                   )}
                 </div>
                 <div className="flex items-center space-x-3 text-xs text-slate-400 font-mono mt-0.5">
-                  <span>{item.rollNo}</span>
+                  <span>PRN: {item.rollNo}</span>
                   <span>• {item.correctCount} correct</span>
                 </div>
               </div>
