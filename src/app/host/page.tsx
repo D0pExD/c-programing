@@ -21,6 +21,7 @@ import {
 import { CodeBlock } from '@/components/CodeBlock';
 import { Leaderboard } from '@/components/Leaderboard';
 import { supabase, FFF_CHANNEL_NAME } from '@/lib/supabase';
+import { GameEngine } from '@/lib/game';
 
 interface HostSnapshot {
   state: 'LOBBY' | 'QUESTION' | 'REVEAL' | 'LEADERBOARD' | 'FINISHED';
@@ -108,17 +109,11 @@ export default function HostControlPage() {
     setLoginInput('');
   };
 
-  // Initial fetch
+  // Initial snapshot from GameEngine
   useEffect(() => {
-    fetch('/api/game')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.snapshot) {
-          setSnapshot(d.snapshot);
-          setLoading(false);
-        }
-      })
-      .catch(() => {});
+    const snap = GameEngine.getSnapshot();
+    setSnapshot(snap);
+    setLoading(false);
   }, []);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -150,19 +145,56 @@ export default function HostControlPage() {
   const sendAction = useCallback(async (action: string, payload?: Record<string, unknown>) => {
     setActionLoading(true);
     try {
-      const res = await fetch('/api/game', {
+      // 1. Direct synchronous execution in Host GameEngine
+      switch (action) {
+        case 'HOST_START': {
+          GameEngine.startQuestion(Number(payload?.index) || 0);
+          break;
+        }
+        case 'HOST_REVEAL': {
+          GameEngine.revealAnswer();
+          break;
+        }
+        case 'HOST_LEADERBOARD': {
+          GameEngine.showLeaderboard();
+          break;
+        }
+        case 'HOST_NEXT': {
+          GameEngine.nextQuestion();
+          break;
+        }
+        case 'HOST_RESET': {
+          GameEngine.resetGame();
+          break;
+        }
+        case 'HOST_SEED': {
+          GameEngine.seedMockPlayers(20);
+          break;
+        }
+        case 'JOIN': {
+          if (payload?.name && payload?.rollNo) {
+            GameEngine.join(String(payload.name), String(payload.rollNo));
+          }
+          break;
+        }
+        case 'SUBMIT': {
+          if (payload?.playerId && payload?.answer !== undefined) {
+            GameEngine.submitAnswer(String(payload.playerId), String(payload.answer));
+          }
+          break;
+        }
+      }
+
+      const snap = GameEngine.getSnapshot();
+      setSnapshot(snap);
+      broadcastState(snap);
+
+      // 2. Background sync to /api/game (non-blocking)
+      fetch('/api/game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, adminPassword, ...payload }),
-      });
-      const data = await res.json();
-      if (data.success && data.snapshot) {
-        setSnapshot(data.snapshot);
-        broadcastState(data.snapshot);
-      } else if (res.status === 401) {
-        setIsAuthenticated(false);
-        sessionStorage.removeItem('fff_admin_pwd');
-      }
+      }).catch(() => {});
     } finally {
       setActionLoading(false);
     }

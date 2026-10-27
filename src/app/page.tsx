@@ -105,25 +105,21 @@ export default function StudentPlayPage() {
 
   const channelRef = useRef<RealtimeChannel | null>(null);
 
-  // Real-Time Supabase WebSocket + HTTP Fallback
+  // Real-Time Supabase WebSocket
   useEffect(() => {
-    const fetchLatest = async () => {
-      try {
-        const url = playerId ? `/api/game?playerId=${playerId}` : '/api/game';
-        const res = await fetch(url);
-        const d = await res.json();
+    // Initial fetch once on load if snapshot not already received
+    const url = playerId ? `/api/game?playerId=${playerId}` : '/api/game';
+    fetch(url)
+      .then((r) => r.json())
+      .then((d) => {
         if (d.snapshot) {
-          setSnapshot(enrichSnapshotForPlayer(d.snapshot, playerId));
+          setSnapshot((prev) => (prev ? prev : enrichSnapshotForPlayer(d.snapshot, playerId)));
           setLoading(false);
         }
-      } catch {
-        // ignore
-      }
-    };
+      })
+      .catch(() => {});
 
-    fetchLatest();
-
-    // 1. Supabase Realtime WebSocket (<50ms globally)
+    // Supabase Realtime WebSocket (<50ms globally)
     if (supabase) {
       const channel = supabase.channel(FFF_CHANNEL_NAME);
       channelRef.current = channel;
@@ -151,19 +147,11 @@ export default function StudentPlayPage() {
           }
         });
 
-      // 2s HTTP poll backup
-      const pollInterval = setInterval(fetchLatest, 2000);
-
       return () => {
-        clearInterval(pollInterval);
         channel.unsubscribe();
         channelRef.current = null;
       };
     }
-
-    // 2. HTTP Polling fallback if Supabase not configured
-    const interval = setInterval(fetchLatest, 1500);
-    return () => clearInterval(interval);
   }, [playerId]);
 
   const fetchSnapshot = async (targetPlayerId?: string) => {

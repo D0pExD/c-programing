@@ -56,24 +56,20 @@ export default function ProjectorDisplayPage() {
     }
   }, []);
 
-  // Real-Time Supabase WebSocket + HTTP Fallback
+  // Real-Time Supabase WebSocket
   useEffect(() => {
-    const fetchLatest = async () => {
-      try {
-        const res = await fetch('/api/game');
-        const d = await res.json();
+    // Initial fetch once on load if snapshot not already received
+    fetch('/api/game')
+      .then((r) => r.json())
+      .then((d) => {
         if (d.snapshot) {
-          setSnapshot(d.snapshot);
+          setSnapshot((prev) => (prev ? prev : d.snapshot));
           setLoading(false);
         }
-      } catch {
-        // ignore
-      }
-    };
+      })
+      .catch(() => {});
 
-    fetchLatest();
-
-    // 1. Supabase Realtime WebSocket (<50ms globally)
+    // Supabase Realtime WebSocket (<50ms globally)
     if (supabase) {
       const channel = supabase.channel(FFF_CHANNEL_NAME);
 
@@ -100,18 +96,10 @@ export default function ProjectorDisplayPage() {
           }
         });
 
-      // Periodic backup fetch every 2s
-      const pollInterval = setInterval(fetchLatest, 2000);
-
       return () => {
-        clearInterval(pollInterval);
         channel.unsubscribe();
       };
     }
-
-    // 2. HTTP Polling fallback if Supabase not configured
-    const interval = setInterval(fetchLatest, 1500);
-    return () => clearInterval(interval);
   }, []);
 
   // Local client-side timer tick (zero network requests)
