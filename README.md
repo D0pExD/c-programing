@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ⚡ C ARENA — Fastest Finger First (BCA C Tournament)
 
-## Getting Started
+A clean, high-performance, real-time **Fastest Finger First** C programming quiz platform.
 
-First, run the development server:
+Built for university **BCA classrooms**:
+- Students scan the QR code / open the link on their mobile phones.
+- Enter **Name** & **Roll Number** to join.
+- Fast and accurate answers earn **Base Points + Speed Bonus**.
+- **The one with the most points wins!**
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## 🚀 Live Routes
+
+| Route | Role |
+|---|---|
+| `/` | **Student Screen (Mobile-First)**: Enter Name & Roll No, answer MCQs & Output questions with instant time feedback. |
+| `/host` | **Host Controller**: Launch questions, reveal answers, show leaderboard, jump between questions, or seed mock students. |
+| `/display` | **Projector Big-Screen (16:9)**: Giant QR code, countdown timer, C code block, live submission counts, and winners podium. |
+
+---
+
+## ⚡ How Fastest Finger First Scoring Works
+
+- **Base Points**: 100 points for a correct answer.
+- **Speed Bonus**: Up to 100 extra points based on how quickly the answer is submitted!
+  $$\text{Speed Ratio} = \frac{\text{Time Limit} - \text{Response Time}}{\text{Time Limit}}$$
+  $$\text{Total Points} = 100 + \text{round}(\text{Speed Ratio} \times 100)$$
+  - *Example*: In a 20-second question, answering in **1.8s** awards **~191 PTS**!
+  - Answering in **18s** awards **~110 PTS**.
+  - Incorrect or expired answers award **0 PTS**.
+- **Leaderboard Ranking**: Ranked strictly by **Highest Total Score** (with tie-breaks decided by most correct answers and fastest cumulative response time).
+
+---
+
+## 📝 Supported Question Types
+
+The platform supports both:
+1. **Multiple Choice (`mcq`)**: 4 tap-to-submit options (A, B, C, D).
+2. **Output Prediction (`output`)**: Students type the exact output printed by the C code (e.g., `12`, `Hello`, `24`). Automatically handles whitespace trimming and case-normalization.
+
+### How to Add / Replace Your 30–40 Questions
+Simply open [`src/data/questions.ts`](file:///Users/d0pe/Documents/GitHub/c-programing/src/data/questions.ts) and add your questions array:
+
+```ts
+{
+  id: 1,
+  type: 'output', // or 'mcq'
+  title: 'Pre-increment Evaluation',
+  code: '#include <stdio.h>\nint main() { ... }',
+  correctAnswer: '12',
+  explanation: '++x increments first, then adds...',
+  timeLimitSeconds: 20,
+}
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🛠️ Quick Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Start local dev server
+npm run dev
 
-## Learn More
+# Run automated tests
+npm test
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Build for production
+npm run build
+```
