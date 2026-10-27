@@ -236,7 +236,6 @@ export class GameEngine {
 
     const now = Date.now();
     const timeMs = Math.max(100, now - this.game.questionStartTime);
-    const timeLimitMs = currentQ.timeLimitSeconds * 1000;
 
     // Check correctness
     let isCorrect = false;
@@ -270,12 +269,33 @@ export class GameEngine {
 
     let points = 0;
     if (isCorrect) {
-      // Fastest finger speed bonus: faster answers get up to 100 bonus points!
-      const remainingMs = Math.max(0, timeLimitMs - timeMs);
-      const speedRatio = Math.max(0, Math.min(1, remainingMs / timeLimitMs));
-      const speedBonus = Math.round(speedRatio * 100);
-      points = 100 + speedBonus; // e.g. 100 base + up to 100 speed = up to 200 pts
+      const timeSec = timeMs / 1000;
+      let speedBonus = 5;
 
+      // Second-by-second Speed Bonus Economy (Up to +50 bonus points):
+      if (timeSec <= 1.5) {
+        speedBonus = 50; // Lightning fast (<= 1.5s)
+      } else if (timeSec <= 2.5) {
+        speedBonus = 45; // <= 2.5s
+      } else if (timeSec <= 4.0) {
+        speedBonus = 40; // <= 4.0s
+      } else if (timeSec <= 6.0) {
+        speedBonus = 35; // <= 6.0s
+      } else if (timeSec <= 8.0) {
+        speedBonus = 30; // <= 8.0s
+      } else if (timeSec <= 10.0) {
+        speedBonus = 25; // <= 10.0s
+      } else if (timeSec <= 12.0) {
+        speedBonus = 20; // <= 12.0s
+      } else if (timeSec <= 15.0) {
+        speedBonus = 15; // <= 15.0s
+      } else if (timeSec <= 18.0) {
+        speedBonus = 10; // <= 18.0s
+      } else {
+        speedBonus = 5;  // Clutch finish before timer expiry
+      }
+
+      points = 100 + speedBonus; // 100 Base + up to 50 Speed Bonus = up to 150 pts
       player.score += points;
       player.correctCount++;
       player.totalTimeMs += timeMs;

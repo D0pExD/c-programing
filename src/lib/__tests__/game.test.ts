@@ -30,7 +30,7 @@ describe('Fastest Finger First GameEngine', () => {
     // Fast player answers
     const fastRes = GameEngine.submitAnswer(p1.id, '12');
     expect(fastRes.isCorrect).toBe(true);
-    expect(fastRes.points).toBeGreaterThan(150); // 100 base + high speed bonus!
+    expect(fastRes.points).toBeGreaterThanOrEqual(140); // 100 base + up to 50 speed bonus!
 
     // Slow player answers with wrong answer
     const wrongRes = GameEngine.submitAnswer(p2.id, '99');
