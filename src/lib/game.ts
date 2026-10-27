@@ -53,12 +53,49 @@ function getGame(): ServerGameState {
       submissions: new Map(),
       listeners: new Set(),
     };
+
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('fff_host_game_backup');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.players && Array.isArray(parsed.players)) {
+            parsed.players.forEach((p: Player) => {
+              globalThis.__fff_game!.players.set(p.id, p);
+            });
+          }
+          if (parsed.state) globalThis.__fff_game.state = parsed.state;
+          if (typeof parsed.questionIndex === 'number') {
+            globalThis.__fff_game.questionIndex = parsed.questionIndex;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
   }
   return globalThis.__fff_game;
 }
 
 export class GameEngine {
   private static game = getGame();
+
+  private static persist() {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(
+          'fff_host_game_backup',
+          JSON.stringify({
+            players: Array.from(this.game.players.values()),
+            state: this.game.state,
+            questionIndex: this.game.questionIndex,
+          })
+        );
+      } catch {
+        // ignore
+      }
+    }
+  }
 
   public static subscribe(fn: Listener) {
     this.game.listeners.add(fn);
@@ -107,6 +144,7 @@ export class GameEngine {
 
     this.game.players.set(id, newPlayer);
     this.recomputeRanks();
+    this.persist();
     this.notify();
     return newPlayer;
   }
@@ -225,13 +263,9 @@ export class GameEngine {
     this.game.questionIndex = 0;
     this.game.questionStartTime = 0;
     this.game.submissions.clear();
-    for (const p of this.game.players.values()) {
-      p.score = 0;
-      p.correctCount = 0;
-      p.totalTimeMs = 0;
-      p.lastAnswer = undefined;
-    }
+    this.game.players.clear();
     this.recomputeRanks();
+    this.persist();
     this.notify();
   }
 

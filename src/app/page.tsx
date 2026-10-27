@@ -11,6 +11,9 @@ import {
   ArrowRight,
   Radio,
   ExternalLink,
+  UserMinus,
+  RefreshCw,
+  UserCheck,
 } from 'lucide-react';
 import { CodeBlock } from '@/components/CodeBlock';
 import { Leaderboard } from '@/components/Leaderboard';
@@ -77,21 +80,84 @@ export default function StudentPlayPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitFeedback, setSubmitFeedback] = useState<string | null>(null);
 
-  // Load existing player ID
+  // Load existing player profile
   useEffect(() => {
-    const saved = localStorage.getItem('fff_player_id');
-    if (saved) {
-      setPlayerId(saved);
+    const savedId = localStorage.getItem('fff_player_id');
+    const savedName = localStorage.getItem('fff_player_name');
+    const savedRoll = localStorage.getItem('fff_player_roll');
+
+    // Only restore session if we have full student details
+    if (savedName && savedRoll) {
+      setName(savedName);
+      setRollNo(savedRoll);
+      if (savedId) {
+        setPlayerId(savedId);
+      }
+    } else {
+      // Incomplete/stale profile from previous tests -> wipe it so user sees the Join form
+      localStorage.removeItem('fff_player_id');
+      localStorage.removeItem('fff_player_name');
+      localStorage.removeItem('fff_player_roll');
+      setPlayerId(null);
     }
   }, []);
 
+  const handleSwitchProfile = () => {
+    localStorage.removeItem('fff_player_id');
+    localStorage.removeItem('fff_player_name');
+    localStorage.removeItem('fff_player_roll');
+    setPlayerId(null);
+    setName('');
+    setRollNo('');
+  };
+
+  const handleResync = () => {
+    const curName = name || (typeof window !== 'undefined' ? localStorage.getItem('fff_player_name') : null);
+    const curRoll = rollNo || (typeof window !== 'undefined' ? localStorage.getItem('fff_player_roll') : null);
+    if (curName && curRoll && channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'STUDENT_JOIN',
+        payload: { name: curName, rollNo: curRoll },
+      });
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'PLAYER_JOIN',
+        payload: { name: curName, rollNo: curRoll },
+      });
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'REQUEST_STATE',
+        payload: {},
+      });
+    }
+    fetch('/api/game')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.snapshot) setSnapshot(enrichSnapshotForPlayer(d.snapshot, playerId));
+      })
+      .catch(() => {});
+  };
+
+  const channelRef = useRef<RealtimeChannel | null>(null);
+
   const enrichSnapshotForPlayer = (raw: Snapshot, pId: string | null): Snapshot => {
-    if (!pId || !raw.leaderboard) return raw;
-    const p = raw.leaderboard.find((item) => item.id === pId);
+    if (!raw.leaderboard) return raw;
+    const savedRoll = typeof window !== 'undefined' ? localStorage.getItem('fff_player_roll') : null;
+    const p = raw.leaderboard.find(
+      (item) => (pId && item.id === pId) || (savedRoll && item.rollNo.toUpperCase() === savedRoll.toUpperCase())
+    );
     if (!p) return raw;
+
+    // Sync player ID if matched by roll number
+    if (typeof window !== 'undefined' && p.id && p.id !== pId) {
+      localStorage.setItem('fff_player_id', p.id);
+      setPlayerId(p.id);
+    }
+
     return {
       ...raw,
-      playerInfo: raw.playerInfo || {
+      playerInfo: {
         id: p.id,
         name: p.name,
         rollNo: p.rollNo,
@@ -103,11 +169,31 @@ export default function StudentPlayPage() {
     };
   };
 
-  const channelRef = useRef<RealtimeChannel | null>(null);
-
   // Real-Time Supabase WebSocket
   useEffect(() => {
-    // Initial fetch once on load if snapshot not already received
+    const handleIncoming = (incoming: Snapshot) => {
+      const savedName = localStorage.getItem('fff_player_name');
+      const savedRoll = localStorage.getItem('fff_player_roll');
+
+      // Auto-rejoin if player has saved details but is not yet in the active Host session
+      if (incoming.leaderboard && savedName && savedRoll) {
+        const found = incoming.leaderboard.find(
+          (p) => p.rollNo.toUpperCase() === savedRoll.toUpperCase() || (playerId && p.id === playerId)
+        );
+        if (!found && channelRef.current) {
+          channelRef.current.send({
+            type: 'broadcast',
+            event: 'STUDENT_JOIN',
+            payload: { name: savedName, rollNo: savedRoll },
+          });
+        }
+      }
+
+      setSnapshot(enrichSnapshotForPlayer(incoming, playerId));
+      setLoading(false);
+    };
+
+    // Initial fetch once on load
     const url = playerId ? `/api/game?playerId=${playerId}` : '/api/game';
     fetch(url)
       .then((r) => r.json())
@@ -127,23 +213,39 @@ export default function StudentPlayPage() {
       channel
         .on('broadcast', { event: 'GAME_STATE' }, (payload) => {
           if (payload.payload) {
-            setSnapshot(enrichSnapshotForPlayer(payload.payload, playerId));
-            setLoading(false);
+            handleIncoming(payload.payload);
           }
         })
         .on('broadcast', { event: 'SNAPSHOT' }, (payload) => {
           if (payload.payload) {
-            setSnapshot(enrichSnapshotForPlayer(payload.payload, playerId));
-            setLoading(false);
+            handleIncoming(payload.payload);
           }
         })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
+            const savedName = localStorage.getItem('fff_player_name');
+            const savedRoll = localStorage.getItem('fff_player_roll');
+
+            // Send request for current state
             channel.send({
               type: 'broadcast',
               event: 'REQUEST_STATE',
               payload: { playerId },
             });
+
+            // If we have saved credentials, ensure Host registers us right now!
+            if (savedName && savedRoll) {
+              channel.send({
+                type: 'broadcast',
+                event: 'STUDENT_JOIN',
+                payload: { name: savedName, rollNo: savedRoll },
+              });
+              channel.send({
+                type: 'broadcast',
+                event: 'PLAYER_JOIN',
+                payload: { name: savedName, rollNo: savedRoll },
+              });
+            }
           }
         });
 
@@ -200,8 +302,34 @@ export default function StudentPlayPage() {
     e.preventDefault();
     if (!name.trim() || !rollNo.trim()) return;
 
+    const cleanName = name.trim();
+    const cleanRoll = rollNo.trim().toUpperCase();
+
     setJoining(true);
     setJoinError(null);
+
+    // 1. Immediately persist credentials to localStorage
+    localStorage.setItem('fff_player_name', cleanName);
+    localStorage.setItem('fff_player_roll', cleanRoll);
+
+    // 2. Set an optimistic player ID so the lobby renders immediately without delay
+    const tempId = `p_temp_${cleanRoll}_${Date.now()}`;
+    localStorage.setItem('fff_player_id', tempId);
+    setPlayerId(tempId);
+
+    // 3. Immediately broadcast join event to Host over Supabase Realtime WebSocket (<50ms)
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'STUDENT_JOIN',
+        payload: { name: cleanName, rollNo: cleanRoll },
+      });
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'PLAYER_JOIN',
+        payload: { name: cleanName, rollNo: cleanRoll },
+      });
+    }
 
     try {
       const res = await fetch('/api/game', {
@@ -209,8 +337,8 @@ export default function StudentPlayPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'JOIN',
-          name: name.trim(),
-          rollNo: rollNo.trim().toUpperCase(),
+          name: cleanName,
+          rollNo: cleanRoll,
         }),
       });
 
@@ -219,24 +347,9 @@ export default function StudentPlayPage() {
         localStorage.setItem('fff_player_id', data.player.id);
         setPlayerId(data.player.id);
         fetchSnapshot(data.player.id);
-
-        if (channelRef.current) {
-          channelRef.current.send({
-            type: 'broadcast',
-            event: 'STUDENT_JOIN',
-            payload: { name: name.trim(), rollNo: rollNo.trim().toUpperCase() },
-          });
-          channelRef.current.send({
-            type: 'broadcast',
-            event: 'PLAYER_JOIN',
-            payload: { name: name.trim(), rollNo: rollNo.trim().toUpperCase() },
-          });
-        }
-      } else {
-        setJoinError(data.error || 'Failed to join');
       }
     } catch {
-      setJoinError('Network error joining the quiz');
+      // WebSocket already notified Host
     } finally {
       setJoining(false);
     }
@@ -392,21 +505,34 @@ export default function StudentPlayPage() {
           </div>
           <div className="min-w-0">
             <span className="font-black text-sm text-white tracking-wider block">FASTEST FINGER</span>
-            {playerInfo && (
-              <span className="text-xs text-slate-400 font-mono truncate block">
-                {playerInfo.name} ({playerInfo.rollNo})
+            <div className="flex items-center space-x-1.5 text-xs text-slate-400 font-mono">
+              <span className="truncate max-w-[130px] sm:max-w-[200px]">
+                {name || playerInfo?.name || 'Student'} ({rollNo || playerInfo?.rollNo || 'ID'})
               </span>
-            )}
+              <button
+                type="button"
+                onClick={handleSwitchProfile}
+                title="Change Name or Roll No"
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 underline font-sans shrink-0"
+              >
+                Change
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Score & Rank Pill */}
-        {playerInfo && (
+        {playerInfo ? (
           <div className="text-right px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 shrink-0">
             <div className="text-sm font-black font-mono text-emerald-400">
               {playerInfo.score} <span className="text-[10px] text-slate-400 font-sans">PTS</span>
             </div>
             <div className="text-[10px] text-slate-400 font-bold">RANK #{playerInfo.rank}</div>
+          </div>
+        ) : (
+          <div className="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400/80 flex items-center space-x-1.5 shrink-0">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>CONNECTED</span>
           </div>
         )}
       </header>
@@ -415,16 +541,59 @@ export default function StudentPlayPage() {
       <main className="flex-1 max-w-xl w-full mx-auto p-4 flex flex-col justify-center">
         {/* 1. LOBBY STATE */}
         {state === 'LOBBY' && (
-          <div className="text-center p-8 bg-slate-900/80 border border-slate-800 rounded-3xl space-y-4 shadow-2xl">
-            <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto animate-pulse">
+          <div className="text-center p-6 sm:p-8 bg-slate-900/90 border border-slate-800 rounded-3xl space-y-5 shadow-2xl backdrop-blur-xl">
+            <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto shadow-[0_0_20px_rgba(0,245,160,0.2)] animate-pulse">
               <Zap className="w-8 h-8 fill-emerald-400" />
             </div>
-            <h2 className="text-xl font-black text-white">YOU&apos;RE IN THE LOBBY!</h2>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-sm mx-auto">
-              Waiting for the host to launch Question 1. Answer as fast as possible to earn maximum speed points!
-            </p>
-            <div className="inline-block px-4 py-1.5 rounded-full bg-slate-950 border border-slate-800 text-xs font-mono text-slate-400">
-              {snapshot.totalPlayers} Students Connected
+
+            <div>
+              <h2 className="text-2xl font-black text-white tracking-tight">YOU&apos;RE IN THE LOBBY!</h2>
+              <p className="text-xs sm:text-sm text-slate-400 max-w-sm mx-auto mt-1">
+                Waiting for the host to launch Question 1. Answer as fast as possible to earn maximum speed points!
+              </p>
+            </div>
+
+            {/* Profile Confirmation Card */}
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800/80 max-w-sm mx-auto space-y-1.5">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-center space-x-1">
+                <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Playing As</span>
+              </div>
+              <div className="text-base font-black text-white">
+                {name || playerInfo?.name || 'Student'}
+              </div>
+              <div className="text-xs font-mono font-bold text-emerald-400">
+                {rollNo || playerInfo?.rollNo || 'Roll No'}
+              </div>
+            </div>
+
+            {/* Total Connected Pill */}
+            <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>
+                <strong>{snapshot.totalPlayers}</strong> {snapshot.totalPlayers === 1 ? 'Student' : 'Students'} In Lobby
+              </span>
+            </div>
+
+            {/* Action buttons: Switch Profile & Re-sync */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={handleSwitchProfile}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-bold flex items-center justify-center space-x-1.5 transition-all"
+              >
+                <UserMinus className="w-3.5 h-3.5 text-rose-400" />
+                <span>Change Name or Roll No</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResync}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-emerald-400 border border-slate-800 text-xs font-mono flex items-center justify-center space-x-1.5 transition-all"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Re-Sync</span>
+              </button>
             </div>
           </div>
         )}
