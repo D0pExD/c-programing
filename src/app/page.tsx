@@ -273,7 +273,7 @@ export default function StudentPlayPage() {
   };
 
   // Local client-side timer tick (zero network requests)
-  const [localTimeRemaining, setLocalTimeRemaining] = useState<number>(20);
+  const [localTimeRemaining, setLocalTimeRemaining] = useState<number>(60);
 
   const gameState = snapshot?.state;
   const timeLimit = snapshot?.currentQuestion?.timeLimitSeconds;
