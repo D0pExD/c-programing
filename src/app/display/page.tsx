@@ -56,24 +56,34 @@ export default function ProjectorDisplayPage() {
     }
   }, []);
 
-  // Real-Time Supabase WebSocket + SSE Fallback
+  // Real-Time Supabase WebSocket + HTTP Fallback
   useEffect(() => {
-    // 1. Initial snapshot fetch
-    fetch('/api/game')
-      .then((r) => r.json())
-      .then((d) => {
+    const fetchLatest = async () => {
+      try {
+        const res = await fetch('/api/game');
+        const d = await res.json();
         if (d.snapshot) {
           setSnapshot(d.snapshot);
           setLoading(false);
         }
-      })
-      .catch(() => {});
+      } catch {
+        // ignore
+      }
+    };
 
-    // 2. Supabase Realtime WebSocket (Global Edge, sub-50ms)
+    fetchLatest();
+
+    // 1. Supabase Realtime WebSocket (<50ms globally)
     if (supabase) {
       const channel = supabase.channel(FFF_CHANNEL_NAME);
 
       channel
+        .on('broadcast', { event: 'GAME_STATE' }, (payload) => {
+          if (payload.payload) {
+            setSnapshot(payload.payload);
+            setLoading(false);
+          }
+        })
         .on('broadcast', { event: 'SNAPSHOT' }, (payload) => {
           if (payload.payload) {
             setSnapshot(payload.payload);
@@ -84,32 +94,24 @@ export default function ProjectorDisplayPage() {
           if (status === 'SUBSCRIBED') {
             channel.send({
               type: 'broadcast',
-              event: 'REQUEST_SNAPSHOT',
+              event: 'REQUEST_STATE',
               payload: {},
             });
           }
         });
 
+      // Periodic backup fetch every 2s
+      const pollInterval = setInterval(fetchLatest, 2000);
+
       return () => {
+        clearInterval(pollInterval);
         channel.unsubscribe();
       };
     }
 
-    // 3. Fallback to SSE
-    const es = new EventSource('/api/game/stream');
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        setSnapshot(data);
-        setLoading(false);
-      } catch {
-        // ignore
-      }
-    };
-
-    return () => {
-      es.close();
-    };
+    // 2. HTTP Polling fallback if Supabase not configured
+    const interval = setInterval(fetchLatest, 1500);
+    return () => clearInterval(interval);
   }, []);
 
   // Local client-side timer tick (zero network requests)

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   Zap,
   Trophy,
@@ -102,24 +103,38 @@ export default function StudentPlayPage() {
     };
   };
 
-  // Real-time Supabase WebSocket + SSE Fallback
+  const channelRef = useRef<RealtimeChannel | null>(null);
+
+  // Real-Time Supabase WebSocket + HTTP Fallback
   useEffect(() => {
-    // 1. Initial snapshot fetch
-    fetch(playerId ? `/api/game?playerId=${playerId}` : '/api/game')
-      .then((r) => r.json())
-      .then((d) => {
+    const fetchLatest = async () => {
+      try {
+        const url = playerId ? `/api/game?playerId=${playerId}` : '/api/game';
+        const res = await fetch(url);
+        const d = await res.json();
         if (d.snapshot) {
-          setSnapshot(d.snapshot);
+          setSnapshot(enrichSnapshotForPlayer(d.snapshot, playerId));
           setLoading(false);
         }
-      })
-      .catch(() => {});
+      } catch {
+        // ignore
+      }
+    };
 
-    // 2. Supabase Realtime WebSocket (<50ms on Vercel)
+    fetchLatest();
+
+    // 1. Supabase Realtime WebSocket (<50ms globally)
     if (supabase) {
       const channel = supabase.channel(FFF_CHANNEL_NAME);
+      channelRef.current = channel;
 
       channel
+        .on('broadcast', { event: 'GAME_STATE' }, (payload) => {
+          if (payload.payload) {
+            setSnapshot(enrichSnapshotForPlayer(payload.payload, playerId));
+            setLoading(false);
+          }
+        })
         .on('broadcast', { event: 'SNAPSHOT' }, (payload) => {
           if (payload.payload) {
             setSnapshot(enrichSnapshotForPlayer(payload.payload, playerId));
@@ -130,34 +145,25 @@ export default function StudentPlayPage() {
           if (status === 'SUBSCRIBED') {
             channel.send({
               type: 'broadcast',
-              event: 'REQUEST_SNAPSHOT',
+              event: 'REQUEST_STATE',
               payload: { playerId },
             });
           }
         });
 
+      // 2s HTTP poll backup
+      const pollInterval = setInterval(fetchLatest, 2000);
+
       return () => {
+        clearInterval(pollInterval);
         channel.unsubscribe();
+        channelRef.current = null;
       };
     }
 
-    // 3. Fallback to SSE
-    const url = playerId ? `/api/game/stream?playerId=${playerId}` : '/api/game/stream';
-    const es = new EventSource(url);
-
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        setSnapshot(data);
-        setLoading(false);
-      } catch {
-        // ignore
-      }
-    };
-
-    return () => {
-      es.close();
-    };
+    // 2. HTTP Polling fallback if Supabase not configured
+    const interval = setInterval(fetchLatest, 1500);
+    return () => clearInterval(interval);
   }, [playerId]);
 
   const fetchSnapshot = async (targetPlayerId?: string) => {
@@ -226,9 +232,13 @@ export default function StudentPlayPage() {
         setPlayerId(data.player.id);
         fetchSnapshot(data.player.id);
 
-        if (supabase) {
-          const channel = supabase.channel(FFF_CHANNEL_NAME);
-          channel.send({
+        if (channelRef.current) {
+          channelRef.current.send({
+            type: 'broadcast',
+            event: 'STUDENT_JOIN',
+            payload: { name: name.trim(), rollNo: rollNo.trim().toUpperCase() },
+          });
+          channelRef.current.send({
             type: 'broadcast',
             event: 'PLAYER_JOIN',
             payload: { name: name.trim(), rollNo: rollNo.trim().toUpperCase() },
@@ -250,9 +260,13 @@ export default function StudentPlayPage() {
 
     setSubmitting(true);
     try {
-      if (supabase) {
-        const channel = supabase.channel(FFF_CHANNEL_NAME);
-        channel.send({
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'STUDENT_SUBMIT',
+          payload: { playerId, answer: answerVal.trim() },
+        });
+        channelRef.current.send({
           type: 'broadcast',
           event: 'SUBMIT_ANSWER',
           payload: { playerId, answer: answerVal.trim() },

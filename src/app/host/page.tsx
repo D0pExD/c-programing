@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   Play,
   Eye,
@@ -120,6 +121,32 @@ export default function HostControlPage() {
       .catch(() => {});
   }, []);
 
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const snapshotRef = useRef<HostSnapshot | null>(null);
+
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
+
+  const broadcastState = useCallback((snap: HostSnapshot) => {
+    if (channelRef.current) {
+      try {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'GAME_STATE',
+          payload: snap,
+        });
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'SNAPSHOT',
+          payload: snap,
+        });
+      } catch {
+        // ignore send error
+      }
+    }
+  }, []);
+
   const sendAction = useCallback(async (action: string, payload?: Record<string, unknown>) => {
     setActionLoading(true);
     try {
@@ -131,16 +158,7 @@ export default function HostControlPage() {
       const data = await res.json();
       if (data.success && data.snapshot) {
         setSnapshot(data.snapshot);
-
-        // Broadcast to all connected devices via Supabase WebSocket (<50ms)
-        if (supabase) {
-          const channel = supabase.channel(FFF_CHANNEL_NAME);
-          channel.send({
-            type: 'broadcast',
-            event: 'SNAPSHOT',
-            payload: data.snapshot,
-          });
-        }
+        broadcastState(data.snapshot);
       } else if (res.status === 401) {
         setIsAuthenticated(false);
         sessionStorage.removeItem('fff_admin_pwd');
@@ -148,42 +166,30 @@ export default function HostControlPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [adminPassword]);
+  }, [adminPassword, broadcastState]);
 
   // Supabase Realtime Channel
   useEffect(() => {
-    if (!supabase) {
-      const es = new EventSource('/api/game/stream');
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          setSnapshot(data);
-          setLoading(false);
-        } catch {
-          // ignore
-        }
-      };
-      return () => {
-        es.close();
-      };
-    }
+    if (!supabase) return;
 
     const channel = supabase.channel(FFF_CHANNEL_NAME);
+    channelRef.current = channel;
 
     channel
-      .on('broadcast', { event: 'REQUEST_SNAPSHOT' }, () => {
-        if (snapshot) {
-          channel.send({
-            type: 'broadcast',
-            event: 'SNAPSHOT',
-            payload: snapshot,
-          });
+      .on('broadcast', { event: 'REQUEST_STATE' }, () => {
+        if (snapshotRef.current) {
+          broadcastState(snapshotRef.current);
         }
       })
-      .on('broadcast', { event: 'SUBMIT_ANSWER' }, async (payload) => {
-        const { playerId, answer } = payload.payload || {};
-        if (playerId && answer !== undefined) {
-          await sendAction('SUBMIT', { playerId, answer });
+      .on('broadcast', { event: 'REQUEST_SNAPSHOT' }, () => {
+        if (snapshotRef.current) {
+          broadcastState(snapshotRef.current);
+        }
+      })
+      .on('broadcast', { event: 'STUDENT_JOIN' }, async (payload) => {
+        const { name, rollNo } = payload.payload || {};
+        if (name && rollNo) {
+          await sendAction('JOIN', { name, rollNo });
         }
       })
       .on('broadcast', { event: 'PLAYER_JOIN' }, async (payload) => {
@@ -192,12 +198,37 @@ export default function HostControlPage() {
           await sendAction('JOIN', { name, rollNo });
         }
       })
-      .subscribe();
+      .on('broadcast', { event: 'STUDENT_SUBMIT' }, async (payload) => {
+        const { playerId, answer } = payload.payload || {};
+        if (playerId && answer !== undefined) {
+          await sendAction('SUBMIT', { playerId, answer });
+        }
+      })
+      .on('broadcast', { event: 'SUBMIT_ANSWER' }, async (payload) => {
+        const { playerId, answer } = payload.payload || {};
+        if (playerId && answer !== undefined) {
+          await sendAction('SUBMIT', { playerId, answer });
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED' && snapshotRef.current) {
+          broadcastState(snapshotRef.current);
+        }
+      });
+
+    // Heartbeat every 2s
+    const heartbeat = setInterval(() => {
+      if (snapshotRef.current) {
+        broadcastState(snapshotRef.current);
+      }
+    }, 2000);
 
     return () => {
+      clearInterval(heartbeat);
       channel.unsubscribe();
+      channelRef.current = null;
     };
-  }, [snapshot, sendAction]);
+  }, [sendAction, broadcastState]);
 
   // If not authenticated, show sleek Admin Lock Screen
   if (!isAuthenticated) {
